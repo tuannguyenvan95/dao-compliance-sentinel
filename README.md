@@ -33,7 +33,7 @@ Decentralized Autonomous Organizations (DAOs) manage billions of dollars in digi
 | **Network** | **GenLayer StudioNet** |
 | **RPC Endpoint** | `https://studio.genlayer.com/api` |
 | **Chain ID** | `61999` |
-| **Contract Address** | `0x511826519eAF9c346060958c1D5387cDC22E5c16` |
+| **Contract Address** | `0x8d27c377317cd07e1AB3a4390eB8b0fa5a136555` |
 | **Deployment Transaction Hash** | `0x44f236fe0447894f4504ee31fac692381511050922c751cabc3b85c8aeb1cea3` |
 | **Deployer Address** | `0xbeDCE8fc22dBF062b5B4a1493c82FEB80f8FA703` |
 | **Transaction Status** | `ACCEPTED` / `FINALIZED` (Result: `SUCCESS`) |
@@ -221,7 +221,7 @@ python scripts/deploy_studionet.py
 from genlayer_py import create_client, create_account, generate_private_key, studionet
 
 client = create_client(studionet, account=create_account(generate_private_key()))
-contract_address = "0x511826519eAF9c346060958c1D5387cDC22E5c16"
+contract_address = "0x8d27c377317cd07e1AB3a4390eB8b0fa5a136555"
 
 # Read live DAO information
 dao_info = client.read_contract(

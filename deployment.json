@@ -2,7 +2,7 @@
   "network": "studionet",
   "chainId": 61999,
   "rpcUrl": "https://studio.genlayer.com/api",
-  "contractAddress": "0x511826519eAF9c346060958c1D5387cDC22E5c16",
+  "contractAddress": "0x8d27c377317cd07e1AB3a4390eB8b0fa5a136555",
   "transactionHash": "0x44f236fe0447894f4504ee31fac692381511050922c751cabc3b85c8aeb1cea3",
   "deployerAddress": "0xbeDCE8fc22dBF062b5B4a1493c82FEB80f8FA703",
   "status": "5",
@@ -41,5 +41,6 @@
     "num_of_rounds": "1",
     "last_round": "{'round': '0', 'leader_index': '0', 'votes_committed': '5', 'votes_revealed': '5', 'appeal_bond': '0', 'rotations_left': '3', 'result': 6, 'round_validators': ['0x03D58A4DeF6fDFc032A56374785a5F571D07Bc11', '0x4aba638Cf0Cf5249437AaD968fC69dde46ae6BAC', '0x772ffCd1dF6Cc566eC4b8d3f4F4f8eBbb6B36C84', '0xE6BD8050758CB15fC88387223E31Ae2708B119dC', '0xDB1c35c1f05d885999b8f13e5735307BcC16Be88'], 'validator_votes_hash': ['0x06932f4f4de92bf2ae4ecb1af5649121ec1be4298e746033098cfb831fbf69e7', '0x889cf0888759f46724f579002a25ce9b8aa80d71a847efac0e326d77895c9cf5', '0xfaf65e2c50f41122b3ea8971613f146d5fa15abb60fc578fab1b1fd5db804fd4', '0xb379b79ed6f0cb1159f79bbc0d22d27dc90a0d59af41747972528e208e874c41', '0x06f42f1105d73d8a2e37db6ebdf508cbc0a65ae30f57b79f53c22b877f26b309'], 'validator_votes': [1, 5, 5, 1, 1], 'validator_votes_name': ['AGREE', 'IDLE', 'IDLE', 'AGREE', 'AGREE']}",
     "status_name": "ACCEPTED"
-  }
+  },
+  "verifiedStatus": "LIVE_AND_VERIFIED_ON_STUDIONET"
 }
