@@ -47,8 +47,8 @@ In response to GenLayer steward review, the contract implements two critical sec
 | **Network** | **GenLayer StudioNet** |
 | **RPC Endpoint** | `https://studio.genlayer.com/api` |
 | **Chain ID** | `61999` |
-| **Contract Address** | `0x9Fe797ed9622d9988b26291fE2972dBBed87f821` |
-| **Explorer URL** | [https://explorer-studio.genlayer.com/address/0x9Fe797ed9622d9988b26291fE2972dBBed87f821](https://explorer-studio.genlayer.com/address/0x9Fe797ed9622d9988b26291fE2972dBBed87f821) |
+| **Contract Address** | `0x3EF55aC105DeE09C06f0eeD0D473C227ABF6063A` |
+| **Explorer URL** | [https://explorer-studio.genlayer.com/address/0x3EF55aC105DeE09C06f0eeD0D473C227ABF6063A](https://explorer-studio.genlayer.com/address/0x3EF55aC105DeE09C06f0eeD0D473C227ABF6063A) |
 | **Deployment Transaction Hash** | `0xe5d901c42fa12f1acbe7b2eb90242c098574d5e9d83c5cd64f26293965b54628` |
 | **Deployer Address** | `0xb15CF3Ce17B312Ce1e61566c4F69eF6395d55763` |
 | **Transaction Status** | `ACCEPTED` / `FINALIZED` (Result: `SUCCESS`) |
@@ -247,7 +247,7 @@ python scripts/deploy_studionet.py
 from genlayer_py import create_client, create_account, generate_private_key, studionet
 
 client = create_client(studionet, account=create_account(generate_private_key()))
-contract_address = "0x9Fe797ed9622d9988b26291fE2972dBBed87f821"
+contract_address = "0x3EF55aC105DeE09C06f0eeD0D473C227ABF6063A"
 
 # Read live DAO information
 dao_info = client.read_contract(
