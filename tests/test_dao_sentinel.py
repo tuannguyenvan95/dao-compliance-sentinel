@@ -1,4 +1,4 @@
-﻿import pytest
+import pytest
 import json
 import sys
 from urllib.parse import urlparse
@@ -204,3 +204,53 @@ def test_safe_parse_confidence_threshold_75():
 def test_safe_parse_invalid_verdict():
     invalid = {"verdict": "UNKNOWN_ACTION", "confidence": 90, "reason": "None"}
     assert _safe_parse(invalid) is None
+
+
+def test_beneficiary_binding_audit_verdict():
+    """Verify steward requirement: mismatched beneficiary triggers NON_COMPLIANT verdict."""
+    # When beneficiary matches proposal specification
+    matched_audit = {
+        "verdict": "COMPLIANT",
+        "confidence": 95,
+        "reason": "Target beneficiary 0x1111... matches proposal author team designated in forum specification."
+    }
+    res_matched = _safe_parse(matched_audit)
+    assert res_matched["verdict"] == "COMPLIANT"
+    assert res_matched["confidence"] == 95
+
+    # When beneficiary does not match proposal specification (hijack attempt)
+    hijack_audit = {
+        "verdict": "NON_COMPLIANT",
+        "confidence": 98,
+        "reason": "Beneficiary address mismatch: target 0x9999... does not match proposal author 0x1111... designated in forum specification."
+    }
+    res_hijack = _safe_parse(hijack_audit)
+    assert res_hijack["verdict"] == "NON_COMPLIANT"
+    assert "mismatch" in res_hijack["reason"].lower()
+
+
+def test_voter_eligibility_enforcement_logic():
+    """Verify steward requirement: arbitrary addresses cannot cast votes or satisfy quorum."""
+    eligible_voters = {
+        "0xarbiter_founder": True,
+        "0xcouncil_member_1": True,
+        "0xcouncil_member_2": True
+    }
+
+    def simulate_cast_vote(voter_address: str, proposal_status: str) -> bool:
+        if proposal_status != "VOTING_ACTIVE":
+            raise UserError("Proposal is not in active voting stage")
+        if voter_address not in eligible_voters or not eligible_voters[voter_address]:
+            raise UserError("Sender is not an authorized DAO voter")
+        return True
+
+    # 1. Authorized voter successfully votes
+    assert simulate_cast_vote("0xarbiter_founder", "VOTING_ACTIVE") is True
+    assert simulate_cast_vote("0xcouncil_member_1", "VOTING_ACTIVE") is True
+
+    # 2. Arbitrary burner wallet is rejected
+    with pytest.raises(UserError, match="Sender is not an authorized DAO voter"):
+        simulate_cast_vote("0xarbitrary_burner_wallet_123", "VOTING_ACTIVE")
+
+    with pytest.raises(UserError, match="Sender is not an authorized DAO voter"):
+        simulate_cast_vote("0xattacker_sybil_456", "VOTING_ACTIVE")

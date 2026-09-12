@@ -25,6 +25,20 @@ Decentralized Autonomous Organizations (DAOs) manage billions of dollars in digi
 
 ---
 
+## 🛡️ Steward Corrections & Enhanced Governance Security
+
+In response to GenLayer steward review, the contract implements two critical security enhancements:
+
+### 1. Target Beneficiary Binding & Corroboration
+* **The Vulnerability**: In naive implementations, an attacker could supply a valid, compliant proposal URL from a legitimate team, but substitute their own wallet address as the `target_beneficiary`.
+* **The Correction**: The stored `target_beneficiary` is explicitly bound into the non-deterministic audit prompt. The validator AI nodes are required to corroborate that the requested beneficiary address matches the designated team, author, or recipient in the fetched forum text. If an arbitrary or mismatched address is attached to a compliant proposal, the AI consensus forces a **`NON_COMPLIANT`** verdict (*"Beneficiary address mismatch or unauthorized recipient"*).
+
+### 2. Strict DAO Voter Eligibility Enforcement
+* **The Vulnerability**: Allowing arbitrary addresses to call `cast_vote` enables Sybil attacks where an attacker creates burner accounts to meet quorum requirements.
+* **The Correction**: `cast_vote` strictly enforces that `gl.message.sender_address` is an authorized DAO voting member registered in `eligible_voters`. Unregistered addresses are immediately reverted with `UserError("Sender is not an authorized DAO voter")`.
+
+---
+
 ## 🌐 Deployed Contract & Verification on StudioNet
 
 | Parameter | Deployment Details |
@@ -33,9 +47,10 @@ Decentralized Autonomous Organizations (DAOs) manage billions of dollars in digi
 | **Network** | **GenLayer StudioNet** |
 | **RPC Endpoint** | `https://studio.genlayer.com/api` |
 | **Chain ID** | `61999` |
-| **Contract Address** | `0x8d27c377317cd07e1AB3a4390eB8b0fa5a136555` |
-| **Deployment Transaction Hash** | `0x44f236fe0447894f4504ee31fac692381511050922c751cabc3b85c8aeb1cea3` |
-| **Deployer Address** | `0xbeDCE8fc22dBF062b5B4a1493c82FEB80f8FA703` |
+| **Contract Address** | `0x9Fe797ed9622d9988b26291fE2972dBBed87f821` |
+| **Explorer URL** | [https://explorer-studio.genlayer.com/address/0x9Fe797ed9622d9988b26291fE2972dBBed87f821](https://explorer-studio.genlayer.com/address/0x9Fe797ed9622d9988b26291fE2972dBBed87f821) |
+| **Deployment Transaction Hash** | `0xe5d901c42fa12f1acbe7b2eb90242c098574d5e9d83c5cd64f26293965b54628` |
+| **Deployer Address** | `0xb15CF3Ce17B312Ce1e61566c4F69eF6395d55763` |
 | **Transaction Status** | `ACCEPTED` / `FINALIZED` (Result: `SUCCESS`) |
 | **Consensus Result** | `MAJORITY_AGREE` (4/5 Validators voted Agree) |
 
@@ -71,10 +86,11 @@ Decentralized Autonomous Organizations (DAOs) manage billions of dollars in digi
 +------------------------------------------+                               +------------------------------------------+
 | 1. gl.nondet.web.render(spec_url)        |                               | 1. Re-render spec URL                    |
 |    - Fetch Discourse / Snapshot spec     |                               | 2. Re-prompt local LLM                   |
-| 2. Dual-sample LLM prompt execution      |                               | 3. Compare semantic VERDICT:             |
-|    - Compare sample 1 & sample 2         |                               |    mine['verdict'] == leader['verdict']  |
-|    - Verify confidence >= 75%            |                               |    & (mine['conf'] >= 75) == (leader>=75)|
-+------------------------------------------+                               +------------------------------------------+
+| 2. Dual-sample LLM prompt execution:     |                               | 3. Compare semantic VERDICT:             |
+|    - Audits budget, milestones, goals    |                               |    mine['verdict'] == leader['verdict']  |
+|    - Binds & verifies target_beneficiary |                               |    & (mine['conf'] >= 75) == (leader>=75)|
+|    - Requires confidence >= 75%          |                               +------------------------------------------+
++------------------------------------------+                                             |
              |                                                                           |
              +-------------------------------------+-------------------------------------+
                                                    |
@@ -88,10 +104,10 @@ Decentralized Autonomous Organizations (DAOs) manage billions of dollars in digi
                     v                                                             v
        +-------------------------+                                   +-------------------------+
        |   Status: VOTING_ACTIVE |                                   | Status: VETOED_UNCONST. |
-       | (DAO Community Votes)   |                                   |  (Proposal Terminated)  |
+       | (Only Eligible Voters)  |                                   |  (Proposal Terminated)  |
        +-------------------------+                                   +-------------------------+
                     |
-                    v cast_vote(support: bool)
+                    v cast_vote(support: bool) [Enforces eligible_voters]
        +-------------------------+
        |   finalize_vote(...)    |
        |  -> PASSED / REJECTED   |
@@ -147,12 +163,12 @@ DAOcomplianceSentinel/
 ├── contracts/
 │   └── Contract.py               # Complete GenLayer Intelligent Contract (v0.2.16)
 ├── tests/
-│   └── test_dao_sentinel.py      # Pytest unit test suite (URL parsing, confidence, logic)
+│   └── test_dao_sentinel.py      # Pytest unit test suite (URL parsing, voter eligibility, binding)
 ├── scripts/
 │   └── deploy_studionet.py       # Automated deployment script targeting GenLayer StudioNet
 ├── gltest.config.yaml            # GenLayer test & network configuration
 ├── deployment.json               # Recorded deployment receipt, hashes, and validator votes
-├── .gitignore                    # Python and environment ignore rules
+├── LICENSE                       # MIT License
 └── README.md                     # Comprehensive documentation & architectural report
 ```
 
@@ -162,26 +178,34 @@ DAOcomplianceSentinel/
 
 ### Write Methods (`@gl.public.write`)
 - **`submit_and_audit_proposal(title: str, requested_grant_amount: bigint, target_beneficiary: str, proposal_spec_url: str) -> str`**
-  Submits a treasury grant proposal. Automatically checks deterministic caps; if valid, launches non-deterministic decentralized web retrieval and AI constitutional adjudication.
+  Submits a treasury grant proposal. Automatically checks deterministic caps, binds `target_beneficiary` into the audit prompt, and launches non-deterministic decentralized web retrieval and AI constitutional adjudication.
+- **`register_voter(voter_address: str) -> None`**
+  Authorizes an address as an eligible DAO voting member (restricted to platform arbiter).
+- **`batch_register_voters(voter_addresses: DynArray[str]) -> None`**
+  Batch authorizes multiple DAO voting members.
+- **`revoke_voter(voter_address: str) -> None`**
+  Revokes voting eligibility from a designated address.
 - **`cast_vote(proposal_id: str, support: bool) -> None`**
-  Allows DAO community members to cast their vote (`for` or `against`) on proposals that have achieved `VOTING_ACTIVE` status.
+  Allows authorized DAO community members to cast their vote (`for` or `against`) on proposals in `VOTING_ACTIVE` status. Reverts if sender is not registered.
 - **`finalize_vote(proposal_id: str) -> str`**
-  Concludes the voting process once quorum (minimum 3 votes) is reached. Transitions status to `PASSED` or `REJECTED`.
+  Concludes the voting process once quorum (minimum 3 votes from eligible voters) is reached. Transitions status to `PASSED` or `REJECTED`.
 - **`resolve_escalated_proposal(proposal_id: str, approve_voting: bool) -> None`**
   Allows the designated platform arbiter to manually resolve an `ESCALATED` proposal caused by network timeouts or anti-bot Cloudflare captchas on the forum host.
 
 ### View Methods (`@gl.public.view`)
+- **`is_eligible_voter(voter_address: str) -> bool`**
+  Returns whether a given address is an authorized DAO voting member.
 - **`get_proposal(proposal_id: str) -> str`**
   Returns serialized JSON containing complete proposal metadata, AI audit verdict, confidence score, constitutional reason, and vote tally.
 - **`get_dao_info() -> str`**
-  Returns serialized JSON describing the DAO's name, on-chain constitution, grant caps, forum URL, and total proposal counter.
+  Returns serialized JSON describing the DAO's name, on-chain constitution, grant caps, forum URL, total proposals, and total eligible voters.
 
 ---
 
 ## 🧪 Testing & Verification
 
 ### Running Automated Unit Tests
-The repository includes a comprehensive unit test suite covering initialization, URL origin extraction, anti-SSRF protections, markdown JSON stripping, and confidence threshold normalization:
+The repository includes a comprehensive unit test suite covering initialization, URL origin extraction, anti-SSRF protections, markdown JSON stripping, confidence threshold normalization, beneficiary binding, and voter eligibility:
 
 ```bash
 # Execute unit tests
@@ -190,14 +214,16 @@ pytest tests/test_dao_sentinel.py -v
 
 **Test Output:**
 ```
-tests/test_dao_sentinel.py::test_dao_sentinel_initialization PASSED      [ 14%]
-tests/test_dao_sentinel.py::test_extract_origin_valid PASSED             [ 28%]
-tests/test_dao_sentinel.py::test_extract_origin_reject_invalid PASSED    [ 42%]
-tests/test_dao_sentinel.py::test_origin_validity_matching PASSED         [ 57%]
-tests/test_dao_sentinel.py::test_parse_llm_json_clean_and_markdown PASSED [ 71%]
-tests/test_dao_sentinel.py::test_safe_parse_confidence_threshold_75 PASSED [ 85%]
-tests/test_dao_sentinel.py::test_safe_parse_invalid_verdict PASSED       [100%]
-============================== 7 passed in 0.04s ==============================
+tests/test_dao_sentinel.py::test_dao_sentinel_initialization PASSED      [ 11%]
+tests/test_dao_sentinel.py::test_extract_origin_valid PASSED             [ 22%]
+tests/test_dao_sentinel.py::test_extract_origin_reject_invalid PASSED    [ 33%]
+tests/test_dao_sentinel.py::test_origin_validity_matching PASSED         [ 44%]
+tests/test_dao_sentinel.py::test_parse_llm_json_clean_and_markdown PASSED [ 55%]
+tests/test_dao_sentinel.py::test_safe_parse_confidence_threshold_75 PASSED [ 66%]
+tests/test_dao_sentinel.py::test_safe_parse_invalid_verdict PASSED       [ 77%]
+tests/test_dao_sentinel.py::test_beneficiary_binding_audit_verdict PASSED [ 88%]
+tests/test_dao_sentinel.py::test_voter_eligibility_enforcement_logic PASSED [100%]
+============================== 9 passed in 0.09s ==============================
 ```
 
 ---
@@ -221,7 +247,7 @@ python scripts/deploy_studionet.py
 from genlayer_py import create_client, create_account, generate_private_key, studionet
 
 client = create_client(studionet, account=create_account(generate_private_key()))
-contract_address = "0x8d27c377317cd07e1AB3a4390eB8b0fa5a136555"
+contract_address = "0x9Fe797ed9622d9988b26291fE2972dBBed87f821"
 
 # Read live DAO information
 dao_info = client.read_contract(

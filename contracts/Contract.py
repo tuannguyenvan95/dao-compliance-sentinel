@@ -128,6 +128,8 @@ class Proposal:
 class Contract(gl.Contract):
     proposals: TreeMap[str, Proposal]
     has_voted: TreeMap[str, bool]
+    eligible_voters: TreeMap[str, bool]
+    total_eligible_voters: bigint
     proposal_counter: bigint
     dao_name: str
     dao_constitution: str
@@ -161,6 +163,75 @@ class Contract(gl.Contract):
         self.max_single_grant_limit = max_single_grant_limit
         self.governance_forum_base = governance_forum_base
         self.platform_arbiter = _addr_str(gl.message.sender_address)
+
+        # Enforce initial DAO voter eligibility (deployer is first eligible voter)
+        self.eligible_voters[self.platform_arbiter] = True
+        self.total_eligible_voters = bigint(1)
+
+    @gl.public.write
+    def register_voter(self, voter_address: str) -> None:
+        """Designates an authorized DAO member eligible to participate in governance voting."""
+        sender = _addr_str(gl.message.sender_address)
+        if sender != self.platform_arbiter:
+            raise UserError("Only platform arbiter can register eligible DAO voters")
+
+        voter_address = voter_address.strip()
+        try:
+            addr = Address(voter_address)
+        except Exception:
+            raise UserError("Invalid voter address format")
+
+        addr_str = addr.as_hex.lower()
+        if addr_str not in self.eligible_voters or not self.eligible_voters[addr_str]:
+            self.eligible_voters[addr_str] = True
+            self.total_eligible_voters += bigint(1)
+
+    @gl.public.write
+    def batch_register_voters(self, voter_addresses: DynArray[str]) -> None:
+        """Batch registers multiple authorized DAO voting council members."""
+        sender = _addr_str(gl.message.sender_address)
+        if sender != self.platform_arbiter:
+            raise UserError("Only platform arbiter can register eligible DAO voters")
+
+        for raw_addr in voter_addresses:
+            clean_addr = raw_addr.strip()
+            try:
+                addr = Address(clean_addr)
+            except Exception:
+                continue
+            addr_str = addr.as_hex.lower()
+            if addr_str not in self.eligible_voters or not self.eligible_voters[addr_str]:
+                self.eligible_voters[addr_str] = True
+                self.total_eligible_voters += bigint(1)
+
+    @gl.public.write
+    def revoke_voter(self, voter_address: str) -> None:
+        """Revokes voting eligibility from a designated address."""
+        sender = _addr_str(gl.message.sender_address)
+        if sender != self.platform_arbiter:
+            raise UserError("Only platform arbiter can revoke eligible DAO voters")
+
+        voter_address = voter_address.strip()
+        try:
+            addr = Address(voter_address)
+        except Exception:
+            raise UserError("Invalid voter address format")
+
+        addr_str = addr.as_hex.lower()
+        if addr_str in self.eligible_voters and self.eligible_voters[addr_str]:
+            self.eligible_voters[addr_str] = False
+            if self.total_eligible_voters > bigint(0):
+                self.total_eligible_voters -= bigint(1)
+
+    @gl.public.view
+    def is_eligible_voter(self, voter_address: str) -> bool:
+        """Checks whether a given address is an authorized DAO voting member."""
+        try:
+            addr = Address(voter_address.strip())
+            addr_str = addr.as_hex.lower()
+        except Exception:
+            return False
+        return addr_str in self.eligible_voters and self.eligible_voters[addr_str]
 
     @gl.public.write
     def submit_and_audit_proposal(
@@ -229,6 +300,7 @@ class Contract(gl.Contract):
         u_spec = str(proposal_spec_url)
         p_title = str(title)
         p_amount = str(requested_grant_amount)
+        p_beneficiary = beneficiary_addr.as_hex.lower()
 
         def leader_fn():
             try:
@@ -243,7 +315,7 @@ class Contract(gl.Contract):
 
             prompt = f"""
 SYSTEM: You are the Autonomous Constitutional Sentinel for {dao_name_str}.
-Audit whether the proposed treasury expenditure adheres strictly to the DAO Constitution.
+Audit whether the proposed treasury expenditure adheres strictly to the DAO Constitution and verifies beneficiary alignment.
 
 DAO CONSTITUTION & GOVERNANCE RULES:
 {constitution_str}
@@ -251,13 +323,15 @@ DAO CONSTITUTION & GOVERNANCE RULES:
 SUBMITTED PROPOSAL DETAILS:
 - Title: {p_title}
 - Requested Budget: {p_amount} wei
+- Target Beneficiary Address: {p_beneficiary}
 
 PROPOSAL TEXT & SPECIFICATION (FROM GOVERNANCE FORUM):
 {spec_text[:4000]}
 
 Rules:
-- COMPLIANT (conf >= 75): The proposal explicitly details deliverables, provides verifiable milestones, aligns with DAO mission, and exhibits zero conflict of interest or treasury draining indicators.
-- NON_COMPLIANT (conf >= 75): Violates constitution guidelines, vague/fraudulent deliverables, unbudgeted expenditure, malicious incentive alignment, or direct treasury drain.
+- BENEFICIARY BINDING MANDATE: The fetched proposal specification MUST designate, authorize, or corroborate that the funds are intended for {p_beneficiary} (or team/proposer affiliated with {p_beneficiary}). If the proposal specifies a different recipient address, or if an arbitrary beneficiary address is attached to an otherwise compliant page, verdict MUST be NON_COMPLIANT with reason 'Beneficiary address mismatch or unauthorized recipient'.
+- COMPLIANT (conf >= 75): The proposal explicitly details deliverables, verifiable milestones, aligns with DAO mission, exhibits zero conflict of interest or treasury draining, AND the target beneficiary ({p_beneficiary}) matches the proposal's authorized recipient/team.
+- NON_COMPLIANT (conf >= 75): Violates constitution guidelines, vague/fraudulent deliverables, unbudgeted expenditure, malicious incentive alignment, direct treasury drain, OR beneficiary address mismatch.
 - ABORT: Proposal page is password-protected, rate-limited, captcha-blocked, or unreadable.
 
 OUTPUT ONLY STRICT JSON:
@@ -335,7 +409,7 @@ OUTPUT ONLY STRICT JSON:
 
     @gl.public.write
     def cast_vote(self, proposal_id: str, support: bool) -> None:
-        """DAO community members vote on proposals that passed constitutional audit."""
+        """Authorized DAO community members vote on proposals that passed constitutional audit."""
         if proposal_id not in self.proposals:
             raise UserError("Proposal not found")
         prop = self.proposals[proposal_id]
@@ -344,6 +418,11 @@ OUTPUT ONLY STRICT JSON:
             raise UserError("Proposal is not in active voting stage")
 
         voter = _addr_str(gl.message.sender_address)
+
+        # Enforce DAO voter eligibility: prevent arbitrary burner wallets from voting or satisfying quorum
+        if voter not in self.eligible_voters or not self.eligible_voters[voter]:
+            raise UserError("Sender is not an authorized DAO voter")
+
         vote_key = proposal_id + "_" + voter
         if vote_key in self.has_voted and self.has_voted[vote_key]:
             raise UserError("Voter has already cast a vote on this proposal")
@@ -359,7 +438,7 @@ OUTPUT ONLY STRICT JSON:
 
     @gl.public.write
     def finalize_vote(self, proposal_id: str) -> str:
-        """Concludes the voting process once quorum/votes are cast."""
+        """Concludes the voting process once quorum/votes are cast by authorized DAO voters."""
         if proposal_id not in self.proposals:
             raise UserError("Proposal not found")
         prop = self.proposals[proposal_id]
@@ -432,4 +511,5 @@ OUTPUT ONLY STRICT JSON:
             "max_single_grant_limit": str(self.max_single_grant_limit),
             "governance_forum_base": self.governance_forum_base,
             "total_proposals": str(self.proposal_counter),
+            "total_eligible_voters": str(self.total_eligible_voters),
         })
